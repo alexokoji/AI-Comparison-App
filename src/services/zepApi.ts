@@ -1,4 +1,4 @@
-import axios from 'axios'
+import apiClient from './apiClient'
 
 // Get configuration from environment variables or localStorage
 const getConfig = () => {
@@ -47,7 +47,7 @@ export const zepApi = {
 
       const sessionIdToUse = sessionId || `session-${Date.now()}`
       
-      const response = await axios.post(`${API_PROXY_URL}/api/zep/messages`, {
+      const response = await apiClient.post(`${API_PROXY_URL}/api/zep/messages`, {
         message,
         sessionId: sessionIdToUse,
         apiKey: config.apiKey,
@@ -55,27 +55,38 @@ export const zepApi = {
       })
       
       return {
-        response: response.data?.summary?.content || response.data?.message || 'Response received',
-        context: response.data,
+        response: response.data?.response || response.data?.summary?.content || response.data?.message || 'No response available',
+        context: response.data?.context || response.data,
       }
     } catch (error: any) {
-      console.error('Zep API Error:', error)
+      // Extract error message from response
       const errorMessage = error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message || 
                           'Failed to communicate with Zep AI'
       
-      if (errorMessage.includes('API key') || errorMessage.includes('CORS')) {
+      // Handle 401 authentication errors
+      if (error.response?.status === 401) {
+        const userMessage = 'Zep API key is invalid or expired. Please check your API key in Settings.'
+        // Don't log expected authentication errors - UI will show them to users
+        throw new Error(userMessage)
+      }
+      
+      // Handle network/CORS errors
+      if (error.message.includes('Network Error') || error.message.includes('CORS') || error.code === 'ERR_NETWORK') {
+        throw new Error('Network error: Please make sure the backend proxy server is running on port 3001')
+      }
+      
+      // Handle missing/invalid API key messages
+      if (errorMessage.includes('API key') || errorMessage.includes('authentication') || errorMessage.includes('unauthorized')) {
         throw new Error('Zep API key is missing or invalid. Please check your Settings.')
       }
       
-      if (error.response?.status === 401) {
-        throw new Error('Zep API authentication failed. Please check your API key in Settings.')
-      }
-      
-      if (error.message.includes('Network Error') || error.message.includes('CORS')) {
-        throw new Error('CORS error: Please make sure the backend proxy server is running on port 3001')
-      }
+      // Log unexpected errors
+      console.error('Zep API Error:', {
+        status: error.response?.status,
+        message: errorMessage
+      })
       
       throw new Error(errorMessage)
     }

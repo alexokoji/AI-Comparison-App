@@ -1,4 +1,4 @@
-import axios from 'axios'
+import apiClient from './apiClient'
 
 // Get configuration from environment variables or localStorage
 const getConfig = () => {
@@ -45,7 +45,7 @@ export const mem0Api = {
         throw new Error('Mem0 API key is not configured. Please add it in Settings.')
       }
 
-      const response = await axios.post(`${API_PROXY_URL}/api/mem0/memories`, {
+      const response = await apiClient.post(`${API_PROXY_URL}/api/mem0/memories`, {
         message,
         sessionId: sessionId || 'default-user',
         apiKey: config.apiKey,
@@ -53,23 +53,33 @@ export const mem0Api = {
       })
       
       return {
-        response: response.data.response || response.data.message || 'Response received',
-        memories: response.data.memories,
+        response: response.data.response || response.data.message || 'No response available',
+        memories: response.data.memories || [],
       }
     } catch (error: any) {
-      console.error('Mem0 API Error:', error)
+      // Extract error message from response
       const errorMessage = error.response?.data?.error || 
                           error.response?.data?.message || 
                           error.message || 
                           'Failed to communicate with Mem0 AI'
       
-      if (errorMessage.includes('API key')) {
+      // Handle 401 authentication errors
+      if (error.response?.status === 401) {
+        const userMessage = 'Mem0 API key is invalid or expired. Please check your API key in Settings.'
+        // Don't log expected authentication errors - UI will show them to users
+        throw new Error(userMessage)
+      }
+      
+      // Handle missing/invalid API key messages
+      if (errorMessage.includes('API key') || errorMessage.includes('authentication')) {
         throw new Error('Mem0 API key is missing or invalid. Please check your Settings.')
       }
       
-      if (error.response?.status === 401) {
-        throw new Error('Mem0 API authentication failed. Please check your API key in Settings.')
-      }
+      // Log unexpected errors
+      console.error('Mem0 API Error:', {
+        status: error.response?.status,
+        message: errorMessage
+      })
       
       throw new Error(errorMessage)
     }
