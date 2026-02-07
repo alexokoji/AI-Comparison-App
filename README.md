@@ -25,10 +25,43 @@ VITE_MEM0_API_URL=https://api.mem0.ai
 VITE_ZEP_API_URL=https://api.getzep.com
 ```
 
-3. Start the development server:
+3. Start the development servers (backend + frontend):
 ```bash
+npm run dev:all
+```
+
+Or run separately:
+```bash
+# Terminal 1 - Backend
+npm run dev:server
+
+# Terminal 2 - Frontend
 npm run dev
 ```
+
+## Production Build
+
+Build and run in production mode:
+
+```bash
+# Build the app
+npm run build
+
+# Start production server
+npm start
+```
+
+## Deployment
+
+This app is ready to deploy to various platforms:
+
+- **Railway** - Easiest option, see `railway.json`
+- **Render** - See `render.yaml`
+- **Vercel** - See `vercel.json`
+- **Docker** - See `Dockerfile`
+- **Any Node.js hosting** - Just run `npm start` after building
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 
 ## API Integration
 
@@ -36,4 +69,6 @@ This app integrates with:
 - **Mem0 AI**: Memory management for AI applications
 - **Zep AI**: Context engineering and temporal memory
 
-Both APIs require authentication via API keys. Please refer to their respective documentation for API endpoints and usage.
+Both APIs require authentication via API keys. Users can configure API keys in the Settings page of the app, or you can set them via environment variables for development.
+
+**Note:** For security, API keys should be configured by users in the app, not hardcoded in the deployment.

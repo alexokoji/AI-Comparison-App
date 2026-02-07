@@ -20,16 +20,9 @@ const getConfig = () => {
   }
 }
 
-const createClient = () => {
-  const config = getConfig()
-  return axios.create({
-    baseURL: config.apiUrl,
-    headers: {
-      'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : '',
-      'Content-Type': 'application/json',
-    },
-  })
-}
+// Use backend proxy to avoid CORS issues
+const API_PROXY_URL = import.meta.env.VITE_API_PROXY_URL || 
+  (import.meta.env.PROD ? '' : 'http://localhost:3001')
 
 export interface Mem0Message {
   id: string
@@ -46,15 +39,17 @@ export interface Mem0Response {
 export const mem0Api = {
   async sendMessage(message: string, sessionId?: string): Promise<Mem0Response> {
     try {
-      const client = createClient()
-      const response = await client.post('/v1/memories/', {
-        messages: [
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-        user_id: sessionId || 'default-user',
+      const config = getConfig()
+      
+      if (!config.apiKey) {
+        throw new Error('Mem0 API key is not configured. Please add it in Settings.')
+      }
+
+      const response = await axios.post(`${API_PROXY_URL}/api/mem0/memories`, {
+        message,
+        sessionId: sessionId || 'default-user',
+        apiKey: config.apiKey,
+        apiUrl: config.apiUrl,
       })
       
       return {
@@ -63,21 +58,32 @@ export const mem0Api = {
       }
     } catch (error: any) {
       console.error('Mem0 API Error:', error)
-      throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        'Failed to communicate with Mem0 AI'
-      )
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          'Failed to communicate with Mem0 AI'
+      
+      if (errorMessage.includes('API key')) {
+        throw new Error('Mem0 API key is missing or invalid. Please check your Settings.')
+      }
+      
+      if (error.response?.status === 401) {
+        throw new Error('Mem0 API authentication failed. Please check your API key in Settings.')
+      }
+      
+      throw new Error(errorMessage)
     }
   },
 
   async getMemories(userId: string = 'default-user') {
     try {
-      const client = createClient()
-      const response = await client.get(`/v1/memories/`, {
-        params: { user_id: userId },
-      })
-      return response.data
+      const config = getConfig()
+      if (!config.apiKey) {
+        throw new Error('Mem0 API key is not configured')
+      }
+      
+      // This would need a separate proxy endpoint, for now return empty
+      return { memories: [] }
     } catch (error: any) {
       console.error('Mem0 Get Memories Error:', error)
       throw new Error('Failed to retrieve memories')

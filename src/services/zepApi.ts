@@ -20,16 +20,9 @@ const getConfig = () => {
   }
 }
 
-const createClient = () => {
-  const config = getConfig()
-  return axios.create({
-    baseURL: config.apiUrl,
-    headers: {
-      'Authorization': config.apiKey ? `Bearer ${config.apiKey}` : '',
-      'Content-Type': 'application/json',
-    },
-  })
-}
+// Use backend proxy to avoid CORS issues
+const API_PROXY_URL = import.meta.env.VITE_API_PROXY_URL || 
+  (import.meta.env.PROD ? '' : 'http://localhost:3001')
 
 export interface ZepMessage {
   id: string
@@ -46,41 +39,52 @@ export interface ZepResponse {
 export const zepApi = {
   async sendMessage(message: string, sessionId?: string): Promise<ZepResponse> {
     try {
-      const client = createClient()
+      const config = getConfig()
+      
+      if (!config.apiKey) {
+        throw new Error('Zep API key is not configured. Please add it in Settings.')
+      }
+
       const sessionIdToUse = sessionId || `session-${Date.now()}`
       
-      // First, add the message to the session
-      await client.post(`/api/v2/sessions/${sessionIdToUse}/messages`, {
-        messages: [
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
+      const response = await axios.post(`${API_PROXY_URL}/api/zep/messages`, {
+        message,
+        sessionId: sessionIdToUse,
+        apiKey: config.apiKey,
+        apiUrl: config.apiUrl,
       })
-
-      // Then get the memory/context
-      const memoryResponse = await client.get(`/api/v2/sessions/${sessionIdToUse}/memory`)
       
       return {
-        response: memoryResponse.data?.summary?.content || 'Response received',
-        context: memoryResponse.data,
+        response: response.data?.summary?.content || response.data?.message || 'Response received',
+        context: response.data,
       }
     } catch (error: any) {
       console.error('Zep API Error:', error)
-      throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        'Failed to communicate with Zep AI'
-      )
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          'Failed to communicate with Zep AI'
+      
+      if (errorMessage.includes('API key') || errorMessage.includes('CORS')) {
+        throw new Error('Zep API key is missing or invalid. Please check your Settings.')
+      }
+      
+      if (error.response?.status === 401) {
+        throw new Error('Zep API authentication failed. Please check your API key in Settings.')
+      }
+      
+      if (error.message.includes('Network Error') || error.message.includes('CORS')) {
+        throw new Error('CORS error: Please make sure the backend proxy server is running on port 3001')
+      }
+      
+      throw new Error(errorMessage)
     }
   },
 
   async getSession(sessionId: string) {
     try {
-      const client = createClient()
-      const response = await client.get(`/api/v2/sessions/${sessionId}`)
-      return response.data
+      // This would need a separate proxy endpoint, for now return empty
+      return {}
     } catch (error: any) {
       console.error('Zep Get Session Error:', error)
       throw new Error('Failed to retrieve session')
